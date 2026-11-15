@@ -223,7 +223,8 @@ contract PredictionPerps {
     // ───────────────────────── trading ─────────────────────────
 
     /// @notice Send MON as margin+fee. Notional = margin * leverage.
-    function openPosition(uint256 marketId, bool isLong, uint256 leverage) external payable nonReentrant returns (uint256 id) {
+    /// @param limitPrice worst acceptable entry (1e18): longs revert above it, shorts revert below it (slippage guard).
+    function openPosition(uint256 marketId, bool isLong, uint256 leverage, uint256 limitPrice) external payable nonReentrant returns (uint256 id) {
         Market storage m = markets[marketId];
         require(!m.settled && block.timestamp < m.expiry, "market closed");
         require(block.timestamp - m.priceTime <= maxStale, "stale price");
@@ -242,6 +243,7 @@ contract PredictionPerps {
 
         uint256 entry = _mark(m, net); // price impact includes this trade
         require(entry >= MIN_PRICE && entry <= MAX_PRICE, "price at edge");
+        require(isLong ? entry <= limitPrice : entry >= limitPrice, "slippage");
         uint256 maxProfit = isLong ? notional * (ONE - entry) / entry : notional * entry / (ONE - entry);
         require(houseBalance - reserved >= maxProfit, "house capacity");
         reserved += maxProfit;

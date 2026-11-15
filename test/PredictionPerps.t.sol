@@ -67,7 +67,7 @@ contract PredictionPerpsTest {
 
     function _open(address who, bool isLong, uint256 lev, uint256 value) internal returns (uint256 id) {
         vm.prank(who);
-        id = p.openPosition{value: value}(0, isLong, lev);
+        id = p.openPosition{value: value}(0, isLong, lev, isLong ? 1e18 : 0);
     }
 
     function _tick() internal { vm.warp(block.timestamp + 1); }
@@ -131,7 +131,18 @@ contract PredictionPerpsTest {
         this.openFromAlice();
     }
 
-    function openFromAlice() external payable { vm.prank(alice); p.openPosition{value: 1 ether}(0, true, 2); }
+    function openFromAlice() external payable { vm.prank(alice); p.openPosition{value: 1 ether}(0, true, 2, 1e18); }
+
+    function testSlippageLimit() public {
+        vm.prank(alice);
+        vm.expectRevert(bytes("slippage"));
+        p.openPosition{value: 1 ether}(0, true, 2, 0.49e18); // long entry 50c > 49c limit
+        vm.prank(bob);
+        vm.expectRevert(bytes("slippage"));
+        p.openPosition{value: 1 ether}(0, false, 2, 0.51e18); // short entry 50c < 51c limit
+        vm.prank(alice);
+        p.openPosition{value: 1 ether}(0, true, 2, 0.5e18); // exact limit ok
+    }
 
     function testOracleMedianAndQuorum() public {
         _tick(); _push3(0, 0.45e18, 0.55e18, false);
@@ -170,7 +181,7 @@ contract PredictionPerpsTest {
         this.bigOpen();
     }
 
-    function bigOpen() external payable { vm.prank(alice); p.openPosition{value: 30 ether}(0, true, 25); }
+    function bigOpen() external payable { vm.prank(alice); p.openPosition{value: 30 ether}(0, true, 25, 1e18); }
 
     function testSkewMovesEntryAndFundingFlows() public {
         p.setMarketParams(0, 1000 ether, 0.1e18, 1e18); // 10c impact at full cap, 100%/day funding at full skew
