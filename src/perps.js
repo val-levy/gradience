@@ -34,6 +34,7 @@ function toUiMarket(m) {
     title: m.name,
     tag: m.name.slice(0, 11),
     price: m.mark,
+    index: m.index, // oracle index, without skew impact (entry price is derived from this)
     move: old?.move ?? 0,
     liquidity: `${fmt(m.longOI + m.shortOI)} MON`,
     expiry: new Date(m.expiry * 1000).toISOString().slice(0, 10),

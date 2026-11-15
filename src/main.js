@@ -309,7 +309,8 @@ function entryPrice(market, isLong, notional) {
   if (!market.oiCap) return market.price;
   const net = market.longOI - market.shortOI + (isLong ? notional : -notional);
   const impact = (market.skew * 100 * net) / market.oiCap;
-  return Math.min(99.99, Math.max(0.01, market.price + impact));
+  // the contract adds impact to the oracle index, not to the current mark (which already has impact)
+  return Math.min(99.99, Math.max(0.01, (market.index ?? market.price) + impact));
 }
 function liquidationPrice(entry, isLong, lev) {
   const e = entry / 100,
@@ -459,8 +460,14 @@ $("#trade").onclick = async () => {
       Number($("#leverage").value),
       amount,
       // 0.5¢ slippage tolerance around the entry shown in the ticket
-      entryPrice(active, side === "long", amount * Number($("#leverage").value)) +
-        (side === "long" ? SLIPPAGE_CENTS : -SLIPPAGE_CENTS),
+      Math.min(
+        100,
+        Math.max(
+          0,
+          entryPrice(active, side === "long", amount * Number($("#leverage").value)) +
+            (side === "long" ? SLIPPAGE_CENTS : -SLIPPAGE_CENTS),
+        ),
+      ),
     );
     notice(`Position opened · tx ${hash.slice(0, 10)}…`);
     if (typeof refreshAll === "function") refreshAll();

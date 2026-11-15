@@ -401,3 +401,10 @@ test("trade button sends a real open with a 0.5c slippage limit", async () => {
   assert.deepEqual(opens, [[7, true, 5, 2, 40.5]]); // idx, long, leverage, MON, entry 40c + 0.5c
   assert.match(app.getElement("notice").textContent, /Position opened/);
 });
+
+test("entry price skews from the oracle index, not the already-skewed mark", () => {
+  const app = createApp(async () => ({ ok: false, status: 503 }));
+  // mark 52 already includes +2c from 200 net long; a new 100 long moves index 50 to 53, not 54
+  app.run(`globalThis.m = { index: 50, price: 52, oiCap: 1000, skew: 0.1, longOI: 200, shortOI: 0 }`);
+  assert.equal(app.run("entryPrice(m, true, 100)").toFixed(2), "53.00");
+});
