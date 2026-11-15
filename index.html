@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1118" />
+    <title>Impact Perps — Trade the outcome</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/professional-theme.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <a class="brand" href="#overview" data-screen-target="overview"
+          ><span class="brand-mark">i</span><span>impact</span><b>perps</b></a
+        >
+        <nav>
+          <a class="selected" href="#overview" data-screen="overview"
+            >Overview</a
+          >
+          <a href="#markets" data-screen="markets">Markets</a>
+          <a href="#trade" data-screen="trade">Trade</a>
+        </nav>
+        <div class="header-actions">
+          <button class="network" type="button"><i></i>Monad Testnet</button
+          ><button class="wallet" id="wallet">
+            ▣ <span>Connect MetaMask</span></button
+          ><button class="mobile-menu" id="menu">☰</button>
+        </div>
+      </header>
+      <main>
+        <section class="app-screen" id="overview-screen">
+          <section class="hero" id="home">
+            <div>
+              <p class="eyebrow">✦ THE FUTURES WE WANT</p>
+              <h1>Trade the outcome.<br /><em>Fund the impact.</em></h1>
+              <p class="subhead">
+                Perpetual markets for the world's most consequential outcomes.
+                Built for conviction, settled by evidence.
+              </p>
+              <div class="hero-actions">
+                <a class="button-primary" href="#markets-section"
+                  >Explore markets <span>↓</span></a
+                >
+                <a class="button-secondary" href="#trading-terminal"
+                  >Open trading terminal <span>↗</span></a
+                >
+              </div>
+            </div>
+            <div class="hero-stat">
+              <span>MARKETS TRACKED</span><strong id="market-count">04</strong>
+              <p><b>TESTNET</b> demo execution</p>
+            </div>
+          </section>
+          <section class="ticker">
+            <span>MARKET MOVEMENT</span><b id="index-move">+2.41%</b>
+            <div class="ticks" id="ticks"></div>
+          </section>
+          <section class="overview-summary">
+            <div class="overview-card featured-market">
+              <p class="eyebrow">FEATURED MARKET</p>
+              <h2 id="overview-title"></h2>
+              <div>
+                <strong id="overview-price"></strong><span>YES index</span>
+              </div>
+              <button type="button" data-screen-target="trade">
+                Open trading terminal ↗
+              </button>
+            </div>
+            <div class="overview-card">
+              <p class="eyebrow">MARKET DATA</p>
+              <h2>One view across live outcomes.</h2>
+              <p id="feed-status">DEMO DATA · CONNECTING TO GEMINI</p>
+              <button type="button" data-screen-target="markets">
+                Browse markets ↗
+              </button>
+            </div>
+          </section>
+        </section>
+        <section class="app-screen" id="trade-screen" hidden>
+          <section class="workspace" id="trading-terminal">
+            <div class="market-panel">
+              <div class="market-top">
+                <div>
+                  <div class="market-tag" id="tag"></div>
+                  <h2 id="title"></h2>
+                </div>
+                <button class="more">•••</button>
+              </div>
+              <div class="price-row">
+                <div>
+                  <span>OUTCOME PRICE</span><strong id="price"></strong
+                  ><b id="move"></b>
+                </div>
+                <div class="chart-tools">
+                  <div class="chart-controls">
+                    <button class="active-range" data-range="1D">1D</button>
+                    <button data-range="1W">1W</button>
+                    <button data-range="1M">1M</button>
+                    <button data-range="ALL">ALL</button>
+                  </div>
+                  <div class="chart-type-controls" aria-label="Chart type">
+                    <button class="chart-type-active" data-chart="line">
+                      Line
+                    </button>
+                    <button data-chart="candles">Candles</button>
+                  </div>
+                </div>
+              </div>
+              <div class="chart">
+                <div class="gridlines"></div>
+                <svg viewBox="0 0 880 250" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">
+                      <stop stop-color="#59d68c" stop-opacity=".3" />
+                      <stop offset="1" stop-color="#59d68c" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path id="chart-area" fill="url(#fill)" />
+                  <path
+                    id="chart-line"
+                    fill="none"
+                    stroke="#8eaee2"
+                    stroke-width="2"
+                    vector-effect="non-scaling-stroke"
+                  />
+                  <g id="chart-candles"></g>
+                </svg>
+                <div class="chart-labels">
+                  <span>00:00</span><span>06:00</span><span>12:00</span
+                  ><span>18:00</span><span>NOW</span>
+                </div>
+              </div>
+              <div class="metrics">
+                <div><span>24H VOLUME</span><b id="volume"></b></div>
+                <div><span>OPEN INTEREST</span><b id="liquidity"></b></div>
+                <div><span>FUNDING / 8H</span><b class="up">+0.012%</b></div>
+                <div><span>RESOLUTION</span><b>Impact Oracle</b></div>
+              </div>
+              <div class="evidence" id="impact-evidence">
+                <b>✓</b>
+                <div>
+                  <b>Verified impact market</b
+                  ><span
+                    >Resolution via a multi-source evidence oracle.
+                    <a>View methodology</a></span
+                  >
+                </div>
+              </div>
+            </div>
+            <aside class="trade-card">
+              <div class="trade-heading">
+                <div>
+                  <span>ORDER TICKET</span>
+                  <b>TESTNET PREVIEW</b>
+                </div>
+                <i></i>
+              </div>
+              <div class="tabs">
+                <button class="long tab-active" data-side="long">
+                  Long YES</button
+                ><button class="short" data-side="short">Short NO</button>
+              </div>
+              <div class="card-body">
+                <label>COLLATERAL <span>Monad USDC · 0.00</span></label>
+                <div class="input-wrap">
+                  <input id="amount" value="250" inputmode="decimal" /><b
+                    >USDC</b
+                  >
+                </div>
+                <div class="quick">
+                  <button data-amount="100">100</button
+                  ><button data-amount="500">500</button
+                  ><button data-amount="1000">1K</button
+                  ><button data-amount="2500">MAX</button>
+                </div>
+                <div class="leverage-label">
+                  <label>LEVERAGE</label><b id="lev-value">3×</b>
+                </div>
+                <input
+                  class="slider"
+                  id="leverage"
+                  type="range"
+                  min="1"
+                  max="50"
+                  value="3"
+                />
+                <div class="lever-pills">
+                  <button>1×</button><button>5×</button><button>10×</button
+                  ><button>25×</button><button>50×</button>
+                </div>
+                <div class="estimate">
+                  <div><span>Position size</span><b id="notional"></b></div>
+                  <div><span>Est. liquidation</span><b id="liq"></b></div>
+                  <div><span>Fee</span><b id="fee"></b></div>
+                </div>
+                <button class="trade-button long" id="trade">
+                  Connect MetaMask to trade
+                </button>
+                <p class="notice" id="notice"></p>
+                <p class="risk">
+                  Demo only · 50× leverage can liquidate your full collateral.
+                </p>
+              </div>
+            </aside>
+          </section>
+        </section>
+        <section class="app-screen" id="markets-screen" hidden>
+          <section class="markets-section" id="markets-section">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">DISCOVER</p>
+                <h2>Markets shaping tomorrow</h2>
+                <p class="market-disclaimer">
+                  Open Gemini contracts are reference data; trading stays
+                  demo-only.
+                </p>
+              </div>
+              <span id="feed-count"></span>
+            </div>
+            <div class="market-toolbar">
+              <div
+                class="market-filters"
+                id="market-filters"
+                aria-label="Filter markets"
+              ></div>
+              <label class="market-search">
+                <span>⌕</span>
+                <input
+                  id="market-search"
+                  type="search"
+                  placeholder="Search markets"
+                  aria-label="Search markets"
+                />
+              </label>
+            </div>
+            <div class="market-grid" id="market-grid"></div>
+            <div class="market-pagination">
+              <span id="market-results-count"></span>
+              <div>
+                <button id="show-more-markets">Show more listings</button>
+                <button id="load-more-markets">Import next batch</button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+      <footer id="docs">
+        <span>© 2026 Impact Perps</span
+        ><span>Built on <b>MONAD</b> · Testnet preview</span
+        ><span>Not available where prohibited.</span>
+      </footer>
+    </div>
+    <script src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+README.md
+package.json
+package-lock.json
+foundry.toml
+wrangler.jsonc
+.assetsignore
+.gitignore
+contracts/
+node_modules/
+.wrangler/

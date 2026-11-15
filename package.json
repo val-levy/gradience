@@ -1,0 +1,17 @@
+{
+  "name": "impact-perps",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 -m http.server",
+    "build": "node --check src/main.js",
+    "preview": "python3 -m http.server 4173",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "ethers": "^6.13.4",
+    "wrangler": "^4.162.0"
+  }
+}

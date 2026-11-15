@@ -1,0 +1,556 @@
+const markets = [
+  {
+    id: "reef",
+    group: "Environment",
+    title: "Will 25% of global coral reefs be protected by 2030?",
+    tag: "OCEAN",
+    price: 42.6,
+    move: 3.4,
+    liquidity: "$1.28m",
+    expiry: "Dec 2030",
+    volume: "$894k",
+    demo: true,
+  },
+  {
+    id: "carbon",
+    group: "Climate",
+    title: "Will carbon removals exceed 50Mt annually by 2030?",
+    tag: "CLIMATE",
+    price: 58.2,
+    move: -1.8,
+    liquidity: "$2.41m",
+    expiry: "Dec 2030",
+    volume: "$1.7m",
+    demo: true,
+  },
+  {
+    id: "water",
+    group: "Access",
+    title: "Will 100m people gain safe water access by 2028?",
+    tag: "WATER",
+    price: 71.4,
+    move: 5.6,
+    liquidity: "$742k",
+    expiry: "Dec 2028",
+    volume: "$623k",
+    demo: true,
+  },
+  {
+    id: "schools",
+    group: "Education",
+    title: "Will 90% of children complete primary school by 2030?",
+    tag: "EDUCATION",
+    price: 63.8,
+    move: 0.7,
+    liquidity: "$1.09m",
+    expiry: "Dec 2030",
+    volume: "$451k",
+    demo: true,
+  },
+];
+const MONAD_TESTNET = {
+  chainId: "0x279f",
+  chainName: "Monad Testnet",
+  nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+  rpcUrls: ["https://testnet-rpc.monad.xyz"],
+};
+let active = markets[0],
+  side = "long",
+  connected = false,
+  walletProvider = null,
+  walletAddress = "",
+  walletChainId = "",
+  chartRange = "1D",
+  chartType = "line",
+  marketCategory = "All",
+  marketSearch = "",
+  visibleMarketCount = 24,
+  feedOffset = 0,
+  feedTotal = Infinity,
+  feedLoading = false,
+  feedError = false;
+const initialMarketCount = markets.length;
+const chartSamples = { "1D": 24, "1W": 40, "1M": 54, ALL: 64 };
+const feedPageSize = 100;
+const marketPageSize = 24;
+const chartLabels = {
+  "1D": ["00:00", "06:00", "12:00", "18:00", "NOW"],
+  "1W": ["-7D", "-5D", "-3D", "-1D", "NOW"],
+  "1M": ["-30D", "-21D", "-14D", "-7D", "NOW"],
+  ALL: ["START", "", "", "", "NOW"],
+};
+const $ = (s) => document.querySelector(s),
+  $$ = (s) => [...document.querySelectorAll(s)];
+function showScreen(name, updateHistory = true) {
+  const validScreens = ["overview", "markets", "trade"];
+  const screenName = validScreens.includes(name) ? name : "overview";
+  $$(".app-screen").forEach((screen) => {
+    screen.hidden = screen.id !== `${screenName}-screen`;
+  });
+  $$("nav [data-screen]").forEach((link) =>
+    link.classList.toggle("selected", link.dataset.screen === screenName),
+  );
+  if (updateHistory && window.location.hash !== `#${screenName}`) {
+    window.history.pushState(null, "", `#${screenName}`);
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function refreshWalletUI() {
+  const label = connected
+    ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)
+    : walletAddress
+      ? "Switch to Testnet"
+      : "Connect MetaMask";
+  $("#wallet span").textContent = label;
+  $("#trade").textContent = connected
+    ? `${side === "long" ? "Long YES" : "Short NO"} · ${$("#leverage").value}×`
+    : "Connect MetaMask to trade";
+}
+function getMetaMaskProvider() {
+  const injected = window.ethereum,
+    providers = Array.isArray(injected?.providers)
+      ? injected.providers
+      : injected
+        ? [injected]
+        : [],
+    provider = providers.find((candidate) => candidate.isMetaMask);
+  if (!provider)
+    throw Error(
+      "MetaMask was not detected. Install the MetaMask extension, then reload this page.",
+    );
+  return provider;
+}
+function handleWalletEvent(provider, event, callback) {
+  if (typeof provider.on === "function") provider.on(event, callback);
+}
+async function switchToMonadTestnet(provider) {
+  try {
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: MONAD_TESTNET.chainId }],
+    });
+  } catch (error) {
+    if (error?.code !== 4902) throw error;
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [MONAD_TESTNET],
+    });
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: MONAD_TESTNET.chainId }],
+    });
+  }
+  const chainId = await provider.request({ method: "eth_chainId" });
+  if (
+    typeof chainId !== "string" ||
+    chainId.toLowerCase() !== MONAD_TESTNET.chainId
+  ) {
+    throw Error("MetaMask must be connected to Monad Testnet.");
+  }
+  return chainId.toLowerCase();
+}
+function registerWalletEvents(provider) {
+  if (walletProvider === provider) return;
+  walletProvider = provider;
+  handleWalletEvent(provider, "accountsChanged", (accounts) => {
+    walletAddress = Array.isArray(accounts) ? (accounts[0] ?? "") : "";
+    connected =
+      Boolean(walletAddress) && walletChainId === MONAD_TESTNET.chainId;
+    refreshWalletUI();
+    $("#notice").textContent = connected
+      ? "MetaMask account updated."
+      : walletAddress
+        ? "Switch MetaMask to Monad Testnet."
+        : "MetaMask disconnected.";
+  });
+  handleWalletEvent(provider, "chainChanged", (chainId) => {
+    walletChainId = String(chainId).toLowerCase();
+    connected =
+      Boolean(walletAddress) && walletChainId === MONAD_TESTNET.chainId;
+    refreshWalletUI();
+    $("#notice").textContent = connected
+      ? "Connected to Monad Testnet."
+      : "Switch MetaMask to Monad Testnet to trade.";
+  });
+}
+function escapeHTML(value) {
+  return String(value).replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character],
+  );
+}
+function createHistory(market) {
+  if (!market.demo) return Array(64).fill(market.price);
+  let price = market.price;
+  return Array.from({ length: 64 }, (_, index) => {
+    if (index === 63) return market.price;
+    price = Math.max(1, Math.min(99, price + (Math.random() - 0.5) * 1.4));
+    return price;
+  });
+}
+function renderChart() {
+  if (!active.history) active.history = createHistory(active);
+  const values = active.history.slice(-chartSamples[chartRange]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = max - min || 1;
+  const points = values.map((value, index) => {
+    const x = (index / Math.max(values.length - 1, 1)) * 880;
+    const y = 225 - ((value - min) / spread) * 180;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const line = `M${points.join(" L")}`;
+  const chartLine = $("#chart-line");
+  const chartArea = $("#chart-area");
+  const candles = $("#chart-candles");
+  if (chartType === "line") {
+    chartLine.style.display = "";
+    chartArea.style.display = "";
+    candles.innerHTML = "";
+    chartLine.setAttribute("d", line);
+    chartArea.setAttribute("d", `${line} L880,250 L0,250 Z`);
+  } else {
+    chartLine.style.display = "none";
+    chartArea.style.display = "none";
+    const barSize = Math.max(2, Math.ceil(values.length / 24));
+    const bars = [];
+    for (let index = 0; index < values.length; index += barSize) {
+      const sample = values.slice(index, index + barSize);
+      if (sample.length < 2) continue;
+      const open = sample[0];
+      const close = sample[sample.length - 1];
+      const high = Math.max(...sample);
+      const low = Math.min(...sample);
+      const x = ((index + sample.length / 2) / values.length) * 880;
+      const yOpen = 225 - ((open - min) / spread) * 180;
+      const yClose = 225 - ((close - min) / spread) * 180;
+      const yHigh = 225 - ((high - min) / spread) * 180;
+      const yLow = 225 - ((low - min) / spread) * 180;
+      const width = Math.max(3, 880 / Math.ceil(values.length / barSize) / 2);
+      bars.push(
+        `<g class="candle ${close >= open ? "up" : "down"}"><line x1="${x.toFixed(1)}" y1="${yHigh.toFixed(1)}" x2="${x.toFixed(1)}" y2="${yLow.toFixed(1)}" stroke="currentColor" stroke-width="1"/><rect x="${(x - width / 2).toFixed(1)}" y="${Math.min(yOpen, yClose).toFixed(1)}" width="${width.toFixed(1)}" height="${Math.max(2, Math.abs(yClose - yOpen)).toFixed(1)}" fill="currentColor"/></g>`,
+      );
+    }
+    candles.innerHTML = bars.join("");
+  }
+  $$(".chart-labels span").forEach((label, index) => {
+    label.textContent = chartLabels[chartRange][index];
+  });
+}
+function renderMarkets() {
+  $("#ticks").innerHTML = markets
+    .slice(0, 8)
+    .map(
+      (m) =>
+        `<button class="${m.id === active.id ? "tick active" : "tick"}" data-market="${m.id}">${escapeHTML(m.tag)} <strong class="${m.move >= 0 ? "up" : "down"}">${m.move >= 0 ? "+" : ""}${m.move}%</strong></button>`,
+    )
+    .join("");
+  const categories = [
+    "All",
+    ...new Set(markets.map((market) => market.group).filter(Boolean)),
+  ];
+  $("#market-filters").innerHTML = categories
+    .map(
+      (category) =>
+        `<button class="${category === marketCategory ? "filter-active" : ""}" data-category="${escapeHTML(category)}">${escapeHTML(category)}</button>`,
+    )
+    .join("");
+  const visibleMarkets = markets.filter((market) => {
+    const matchesCategory =
+      marketCategory === "All" || market.group === marketCategory;
+    const query = marketSearch.toLowerCase();
+    const matchesQuery =
+      !query ||
+      `${market.title} ${market.group} ${market.tag}`
+        .toLowerCase()
+        .includes(query);
+    return matchesCategory && matchesQuery;
+  });
+  const page = visibleMarkets.slice(0, visibleMarketCount);
+  $("#market-grid").innerHTML = page.length
+    ? page
+        .map(
+          (market) =>
+            `<button class="market-card${market.id === active.id ? " selected-market" : ""}" data-market="${escapeHTML(market.id)}" aria-pressed="${market.id === active.id}"><div><span>${escapeHTML(market.group.toUpperCase())}</span><b class="${market.move >= 0 ? "up" : "down"}">${market.move >= 0 ? "+" : ""}${market.move}%</b></div><h3>${escapeHTML(market.title)}</h3><div class="card-price"><strong>${market.price.toFixed(1)}¢</strong><span>YES price</span></div><div class="card-foot"><span>24H ${escapeHTML(market.volume)}</span><span>◷ ${escapeHTML(market.expiry)}</span></div></button>`,
+        )
+        .join("")
+    : '<div class="empty-state">No markets match this search.</div>';
+  $$("[data-market]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        active = markets.find((m) => m.id === b.dataset.market);
+        render();
+        showScreen("trade");
+      }),
+  );
+  $$(".market-filters [data-category]").forEach(
+    (button) =>
+      (button.onclick = () => {
+        marketCategory = button.dataset.category;
+        visibleMarketCount = marketPageSize;
+        renderMarkets();
+      }),
+  );
+  $("#market-count").textContent = String(markets.length).padStart(2, "0");
+  $("#overview-title").textContent = active.title;
+  $("#overview-price").textContent = `${active.price.toFixed(1)}¢`;
+  $("#feed-count").textContent =
+    `${markets.length - initialMarketCount} imported · ${feedOffset}/${Number.isFinite(feedTotal) ? feedTotal : "—"} events`;
+  $("#market-results-count").textContent =
+    `Showing ${Math.min(visibleMarketCount, visibleMarkets.length)} of ${visibleMarkets.length} matching markets · ${markets.length - initialMarketCount} imported`;
+  $("#show-more-markets").hidden = visibleMarketCount >= visibleMarkets.length;
+  $("#show-more-markets").disabled = feedLoading;
+  $("#load-more-markets").hidden = feedOffset >= feedTotal && !feedError;
+  $("#load-more-markets").disabled = feedLoading;
+  $("#load-more-markets").textContent = feedLoading
+    ? "Importing…"
+    : feedError
+      ? "Retry import"
+      : "Import next batch";
+}
+function estimate() {
+  const amount = Number($("#amount").value) || 0,
+    lev = Number($("#leverage").value),
+    notional = amount * lev,
+    liq =
+      side === "long"
+        ? active.price * (1 - (1 / lev) * 0.82)
+        : active.price * (1 + (1 / lev) * 0.82);
+  $("#lev-value").textContent = lev + "×";
+  $("#notional").textContent =
+    "$" + notional.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  $("#liq").textContent = liq.toFixed(1) + "¢";
+  $("#fee").textContent = "$" + (notional * 0.0005).toFixed(2);
+  $$(".lever-pills button").forEach((b) =>
+    b.classList.toggle("chosen", b.textContent === lev + "×"),
+  );
+}
+function render() {
+  $("#tag").textContent = `${active.group.toUpperCase()}  •  ${active.expiry}`;
+  $("#title").textContent = active.title;
+  $("#price").textContent = active.price.toFixed(1) + "¢";
+  $("#overview-title").textContent = active.title;
+  $("#overview-price").textContent = `${active.price.toFixed(1)}¢`;
+  const move = $("#move");
+  move.className = active.move >= 0 ? "up" : "down";
+  move.textContent = `${active.move >= 0 ? "↗ +" : "↘ "}${active.move}% 24h`;
+  $("#volume").textContent = active.volume;
+  $("#liquidity").textContent = active.liquidity;
+  renderChart();
+  renderMarkets();
+  estimate();
+}
+$("#wallet").onclick = async () => {
+  try {
+    const provider = getMetaMaskProvider();
+    walletChainId = await switchToMonadTestnet(provider);
+    const accounts = await provider.request({
+      method: "eth_requestAccounts",
+    });
+    const account = Array.isArray(accounts) ? accounts[0] : "";
+    if (typeof account !== "string" || !account) {
+      throw Error("MetaMask did not return an account.");
+    }
+    walletAddress = account;
+    connected = true;
+    registerWalletEvents(provider);
+    refreshWalletUI();
+    $("#notice").textContent = "MetaMask connected to Monad Testnet.";
+  } catch (error) {
+    $("#notice").textContent =
+      error instanceof Error ? error.message : "MetaMask connection failed.";
+  }
+};
+$("#menu").onclick = () => $("nav").classList.toggle("open");
+$$("[data-screen], [data-screen-target]").forEach((link) => {
+  link.onclick = (event) => {
+    event.preventDefault();
+    showScreen(link.dataset.screen || link.dataset.screenTarget);
+    $("nav").classList.remove("open");
+  };
+});
+window.addEventListener("popstate", () => {
+  showScreen(window.location.hash.slice(1), false);
+});
+$("#show-more-markets").onclick = () => {
+  visibleMarketCount += marketPageSize;
+  renderMarkets();
+};
+$("#load-more-markets").onclick = loadGeminiMarkets;
+$$("[data-range]").forEach((button) => {
+  button.onclick = () => {
+    chartRange = button.dataset.range;
+    $$(".chart-controls [data-range]").forEach((item) =>
+      item.classList.toggle("active-range", item === button),
+    );
+    renderChart();
+  };
+});
+$$("[data-chart]").forEach((button) => {
+  button.onclick = () => {
+    chartType = button.dataset.chart;
+    $$("[data-chart]").forEach((item) =>
+      item.classList.toggle("chart-type-active", item === button),
+    );
+    renderChart();
+  };
+});
+$("#market-search").oninput = (event) => {
+  marketSearch = event.target.value.trim();
+  visibleMarketCount = marketPageSize;
+  renderMarkets();
+};
+$$(".tabs button").forEach(
+  (b) =>
+    (b.onclick = () => {
+      side = b.dataset.side;
+      $$(".tabs button").forEach((x) =>
+        x.classList.toggle("tab-active", x === b),
+      );
+      $("#trade").className = "trade-button " + side;
+      $("#trade").textContent = connected
+        ? `${side === "long" ? "Long YES" : "Short NO"} · ${$("#leverage").value}×`
+        : "Connect MetaMask to trade";
+      estimate();
+    }),
+);
+$$("[data-amount]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      $("#amount").value = b.dataset.amount;
+      estimate();
+    }),
+);
+$("#amount").oninput = () => {
+  $("#amount").value = $("#amount").value.replace(/[^0-9.]/g, "");
+  estimate();
+};
+$("#leverage").oninput = () => {
+  estimate();
+  if (connected)
+    $("#trade").textContent =
+      `${side === "long" ? "Long YES" : "Short NO"} · ${$("#leverage").value}×`;
+};
+$$(".lever-pills button").forEach(
+  (b) =>
+    (b.onclick = () => {
+      $("#leverage").value = b.textContent.replace("×", "");
+      $("#leverage").oninput();
+    }),
+);
+$("#trade").onclick = () => {
+  $("#notice").textContent = connected
+    ? `${side === "long" ? "Long" : "Short"} order staged on Monad Testnet. No deployed contract is connected, so no transaction was sent.`
+    : "Connect MetaMask on Monad Testnet to stage a demo order.";
+};
+async function loadGeminiMarkets() {
+  if (feedLoading || (feedOffset >= feedTotal && !feedError)) return;
+  feedLoading = true;
+  feedError = false;
+  $("#feed-status").textContent = "FETCHING GEMINI MARKETS…";
+  renderMarkets();
+  try {
+    const response = await fetch(
+      `https://api.gemini.com/v1/prediction-markets/events?limit=${feedPageSize}&offset=${feedOffset}`,
+    );
+    if (!response.ok) {
+      throw Error(`Gemini feed returned HTTP ${response.status}.`);
+    }
+    const payload = await response.json();
+    const events = Array.isArray(payload.data)
+      ? payload.data
+      : Array.isArray(payload.events)
+        ? payload.events
+        : [];
+    if (!events.length) {
+      feedTotal = feedOffset;
+      return;
+    }
+    const nextOffset = feedOffset + events.length;
+    const reportedTotal = Number(payload.pagination?.total ?? nextOffset);
+    feedTotal = Number.isFinite(reportedTotal) ? reportedTotal : nextOffset;
+    feedOffset = nextOffset;
+    const existingIds = new Set(markets.map((market) => market.id));
+    const imported = events
+      .filter((event) => event.status === "active")
+      .flatMap((event) =>
+        (Array.isArray(event.contracts) ? event.contracts : [])
+          .filter(
+            (contract) =>
+              contract.status === "active" && contract.marketState === "open",
+          )
+          .map((contract) => {
+            const yesPrice = Number(
+              contract.prices?.lastTradePrice ?? contract.prices?.buy?.yes,
+            );
+            const volume = Number(event.volume24h ?? event.volume);
+            return {
+              id: `gemini-${contract.id}`,
+              group: event.category || "Other",
+              title: `${event.title || "Prediction market"} · ${contract.label || contract.ticker || ""}`,
+              tag: (contract.ticker || event.ticker || "GEMINI").slice(0, 11),
+              price: yesPrice * 100,
+              move: 0,
+              liquidity: "—",
+              expiry: (contract.expiryDate || event.expiryDate || "Open").slice(
+                0,
+                10,
+              ),
+              volume: Number.isFinite(volume)
+                ? new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                    notation: "compact",
+                    maximumFractionDigits: 1,
+                  }).format(volume)
+                : "—",
+              demo: false,
+            };
+          }),
+      )
+      .filter(
+        (market) =>
+          Number.isFinite(market.price) &&
+          market.price > 0 &&
+          market.price <= 100 &&
+          !existingIds.has(market.id),
+      );
+    markets.push(...imported);
+    visibleMarketCount += marketPageSize;
+    $("#feed-status").textContent =
+      `GEMINI PUBLIC DATA · ${markets.length - initialMarketCount} OPEN CONTRACTS`;
+  } catch (error) {
+    feedError = true;
+    $("#feed-status").textContent =
+      error instanceof Error
+        ? `GEMINI FEED UNAVAILABLE · ${error.message}`
+        : "GEMINI FEED UNAVAILABLE · RETRY BELOW";
+    console.error("Could not import Gemini markets.", error);
+  } finally {
+    feedLoading = false;
+    render();
+  }
+}
+setInterval(() => {
+  if (!active.demo) return;
+  const delta = (Math.random() - 0.46) * 0.18;
+  active.price = Math.max(1, Math.min(99, active.price + delta));
+  active.move = Number((active.move + delta).toFixed(2));
+  if (!active.history) active.history = createHistory(active);
+  active.history.push(active.price);
+  if (active.history.length > 64) active.history.shift();
+  $("#index-move").textContent =
+    (active.move >= 0 ? "+" : "") + active.move.toFixed(2) + "%";
+  render();
+}, 1800);
+const initialScreen = window.location.hash.slice(1);
+showScreen(initialScreen || "overview", false);
+render();
+loadGeminiMarkets();
