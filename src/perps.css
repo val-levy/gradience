@@ -1,0 +1,16 @@
+/* My positions + House dashboard (matches styles.css palette) */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:8px}
+.kpis>div{border:1px solid #303831;border-radius:5px;background:#151815;padding:14px 16px}
+.kpis b{display:block;margin-top:8px;font:15px 'DM Mono'}
+.table-title{font:11px 'DM Mono';letter-spacing:1px;color:#72db9a;margin:34px 0 10px}
+.table-wrap{overflow-x:auto;border:1px solid #303831;border-radius:5px;background:#151815}
+.data-table{width:100%;border-collapse:collapse;font:12px 'DM Mono';white-space:nowrap}
+.data-table th{text-align:left;color:#828a81;font-weight:400;letter-spacing:.6px;font-size:10px;padding:11px 14px;border-bottom:1px solid #303831}
+.data-table td{padding:11px 14px;border-bottom:1px solid #232a24}
+.data-table tr:last-child td{border-bottom:0}
+.data-table button,.house-actions button{border:1px solid #3b453b;border-radius:3px;padding:5px 10px;font:11px 'DM Mono';color:#cfd8cd}
+.data-table button:hover,.house-actions button:hover{border-color:#68db96;color:#80e7a8}
+.house-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.house-actions input{height:36px;width:140px;background:transparent;border:1px solid #3b453b;border-radius:4px;color:#edf2ec;padding:0 10px;font-family:'DM Mono'}
+.house-actions .notice{margin:0}
+#list-market{background:#273b2d;color:#80e7a8}
