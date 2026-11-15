@@ -130,8 +130,10 @@ const Chain = (() => {
       return rows.sort((a, b) => b.block - a.block).slice(0, 40);
     },
     // writes — each returns the tx hash after the tx is mined
-    async open(wallet, idx, isLong, leverage, amountMon) {
-      const tx = await (await write(wallet)).openPosition(idx, isLong, leverage, { value: ethers.parseEther(String(amountMon)) });
+    // limitCents: worst acceptable entry price in cents (longs revert above, shorts below)
+    async open(wallet, idx, isLong, leverage, amountMon, limitCents) {
+      const limit = ethers.parseUnits(limitCents.toFixed(4), 16);
+      const tx = await (await write(wallet)).openPosition(idx, isLong, leverage, limit, { value: ethers.parseEther(String(amountMon)) });
       await tx.wait();
       return tx.hash;
     },

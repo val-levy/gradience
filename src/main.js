@@ -303,7 +303,8 @@ function renderMarkets() {
 // Mirrors PredictionPerps: entry = index + skew × (net OI after trade) / cap;
 // liquidation when equity falls to the 1% maintenance margin (funding ignored).
 const FEE = 0.0005,
-  MAINT = 0.01;
+  MAINT = 0.01,
+  SLIPPAGE_CENTS = 0.5;
 function entryPrice(market, isLong, notional) {
   if (!market.oiCap) return market.price;
   const net = market.longOI - market.shortOI + (isLong ? notional : -notional);
@@ -457,6 +458,9 @@ $("#trade").onclick = async () => {
       side === "long",
       Number($("#leverage").value),
       amount,
+      // 0.5¢ slippage tolerance around the entry shown in the ticket
+      entryPrice(active, side === "long", amount * Number($("#leverage").value)) +
+        (side === "long" ? SLIPPAGE_CENTS : -SLIPPAGE_CENTS),
     );
     notice(`Position opened · tx ${hash.slice(0, 10)}…`);
     if (typeof refreshAll === "function") refreshAll();
