@@ -1,52 +1,71 @@
-# Impact Perps
+# Impact Perps — perps on prediction markets (Monad)
 
-An MVP interface for perpetual markets on impact outcomes, designed for Monad.
+Leveraged long/short on the probability (0–100¢) of a prediction-market outcome. Margin is MON. A house vault is the counterparty; prices come from a signed multi-venue oracle (Gemini + Polymarket); markets settle at exactly 0¢ or 100¢ when the venue resolves.
+
+**Status: testnet only, unaudited.**
+
+## Architecture
+
+| Piece | Where | What it does |
+| --- | --- | --- |
+| Contract | `contracts/PredictionPerps.sol` | Markets, positions, house vault, liquidations, funding, OI-skew price impact, EIP-712 oracle, settlement |
+| Tests | `test/PredictionPerps.t.sol` | 13 Foundry tests incl. a solvency fuzz (`forge test`) |
+| Deploy | `scripts/deploy.mjs` | Deploys, sets signers/quorum, funds the house, writes `src/config.js` |
+| Keeper | `scripts/keeper.mjs` | Fetches Gemini/Polymarket prices, signs, relays `updatePrice` |
+| Frontend | `index.html`, `src/*.js` | Markets, Trade, My positions, House dashboard (static, ethers v6) |
+
+**Mechanics.** Long PnL = notional·(px−entry)/entry; short PnL = notional·(entry−px)/(1−entry). Max profit is reserved from the house at open, so the vault can always pay. Entry = index + skewFactor·netOI/oiCap (both skew and funding default to 0). Leverage ≤ 25×, maintenance margin 1%, fee 0.05%/side, entries only between 3¢ and 97¢. `openPosition` takes a `limitPrice` (slippage guard; the UI uses ±0.5¢). Expired markets allow a fail-safe exit 7 days after expiry. Failed payouts go to `claimable`.
+
+**Oracle.** Each signer key quotes one venue. `updatePrice` needs `quorum` signatures (sorted by signer address), takes the median, requires a newer timestamp, and rejects stale data. A `finalized` update settles the market at 0 or 1; the keeper only finalizes when every quoting venue reports the same resolution.
 
 ## Run locally
 
 ```bash
 npm install
-npm run dev -- 5174
+npm run dev            # http://localhost:8000
+npm test               # frontend tests
+forge test             # contract tests
 ```
 
-This project has no runtime npm dependencies. `5174` is an arbitrary port; choose
-another available port if it is already occupied, then open `http://localhost:5174`.
+Without a deployment (`src/config.js` is a stub) the app shows Gemini markets as reference data only.
 
-The UI connects MetaMask to Monad Testnet. Trades are staged in the interface only; no transaction is sent until the Impact Perps contract is deployed and integrated.
+## Deploy to Monad testnet
 
-## Data and execution model
+You run these with your own funded testnet key (never paste keys into chat or commit them):
 
-- **Market discovery/data:** the Markets screen loads open binary contracts from Gemini's public Prediction Markets `events` endpoint in 100-event batches. Use “Import next batch” to add more; listings are paginated in the UI for responsiveness.
-- **Screens:** Overview, Markets, and Trade are separate views. Choosing a market from the directory opens its trading terminal.
-- **Wallet:** MetaMask connects to Monad Testnet (chain ID `10143`). If needed, the app asks MetaMask to add the testnet RPC.
-- **Execution:** deliberately separate from Gemini. The current trade action is a demo preview and never broadcasts a transaction.
-- **Demo ticker:** the initial impact market moves locally every 1.8 seconds so the demo remains active if the public feed is unavailable.
+```bash
+forge build
+export RPC_URL=https://testnet-rpc.monad.xyz
+export DEPLOYER_KEY=0x…                 # funded with testnet MON; becomes owner
+export SIGNER_ADDRESSES=0xA…,0xB…       # oracle signer addresses
+QUORUM=2 HOUSE_DEPOSIT=100 node scripts/deploy.mjs
 
-The demo never sends orders to Gemini and has no deployed contract address yet, so it cannot transfer funds.
+RELAYER_KEY=0x… SIGNER_KEYS=0xk1,0xk2 SIGNER_VENUES=gemini,polymarket node scripts/keeper.mjs
+```
 
-## Deploy to Cloudflare Workers
+Then open the app as the owner wallet, pick a Gemini market on the Trade screen and press **List this market on-chain** (defaults: 500 MON OI cap, 5¢ skew, 10%/day funding). Add the venue ids for it to `scripts/keeper.markets.json` (`{ "<market name>": { "gemini": "GEMI-…", "polymarket": "<conditionId>" } }`) so the keeper quotes it. Local testing works the same against `anvil` with `RPC_URL=http://127.0.0.1:8545`.
 
-Live site: <https://impact-perps.valentinlevya.workers.dev>
+`scripts/deploy.mjs` overwrites `src/config.js` with the address and ABI; commit that file only for a real testnet deployment, not a local one.
 
-After authenticating Wrangler with your Cloudflare account, run:
+## Deploy the site (Cloudflare Workers)
 
 ```bash
 npm run deploy
 ```
 
-The static site is served from the project root. `.assetsignore` keeps source-only files and the instructional contract out of the public deployment.
+`.assetsignore` keeps contracts, scripts and tests out of the public bundle.
 
-## Monad deployment target
+## Screens
 
-The prototype uses standard Solidity because Monad is EVM-compatible.
+- **Markets** — on-chain perps (top) and Gemini reference contracts; Gemini rows disappear once listed.
+- **Trade** — chart from oracle updates, MON ticket with skew-aware entry and liquidation estimate.
+- **My positions** — your open positions, PnL, funding, close buttons.
+- **House** (owner nav link; read-only for others) — vault, reserved, realized P&L, per-market OI and settle-YES/NO scenarios, every position with Liquidate buttons, recent trades, deposit/withdraw.
 
-| Network       | Chain ID | RPC                             |
-| ------------- | -------: | ------------------------------- |
-| Monad mainnet |    `143` | `https://rpc.monad.xyz`         |
-| Monad testnet |  `10143` | `https://testnet-rpc.monad.xyz` |
+## Known limits
 
-`contracts/ImpactPerps.sol` is intentionally an instructional prototype, not production-ready financial infrastructure. Before handling funds, use audited ERC-20 collateral handling, a verified decentralized oracle, isolated market vaults, liquidation/ADL mechanics, governance controls, testing, and an external security audit.
-
-## Product decision
-
-Each market expresses the probability of a verifiable impact outcome as a 0–100¢ index. Traders can take a leveraged long on YES or short on NO. An evidence oracle proposes and settles indices from predefined public sources and methodology.
+- All oracle signer keys can run in one keeper process; for real trust-minimisation run one signer per party.
+- Funding/skew parameters are untuned; the contract is unaudited and only for testnet.
+- History is read with `eth_getLogs` over a bounded lookback (200k blocks prices, 50k blocks trades) because RPCs cap ranges; use an indexer for full history.
+- The "move" shown for on-chain markets is change since the first oracle update in the lookback window, not a true 24h change.
+- Deposits are the native token (MON); there is no ERC-20 collateral.

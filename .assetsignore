@@ -8,3 +8,8 @@ wrangler.jsonc
 contracts/
 node_modules/
 .wrangler/
+scripts/
+test/
+tests/
+out/
+cache/
