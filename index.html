@@ -7,6 +7,7 @@
     <title>Impact Perps — Trade the outcome</title>
     <link rel="stylesheet" href="/src/styles.css" />
     <link rel="stylesheet" href="/src/professional-theme.css" />
+    <link rel="stylesheet" href="/src/perps.css" />
   </head>
   <body>
     <div class="app">
@@ -20,6 +21,8 @@
           >
           <a href="#markets" data-screen="markets">Markets</a>
           <a href="#trade" data-screen="trade">Trade</a>
+          <a href="#positions" data-screen="positions">My positions</a>
+          <a href="#house" data-screen="house" id="house-nav" hidden>House</a>
         </nav>
         <div class="header-actions">
           <button class="network" type="button"><i></i>Monad Testnet</button
@@ -134,16 +137,16 @@
               <div class="metrics">
                 <div><span>24H VOLUME</span><b id="volume"></b></div>
                 <div><span>OPEN INTEREST</span><b id="liquidity"></b></div>
-                <div><span>FUNDING / 8H</span><b class="up">+0.012%</b></div>
-                <div><span>RESOLUTION</span><b>Impact Oracle</b></div>
+                <div><span>FUNDING / DAY (FULL SKEW)</span><b id="funding">—</b></div>
+                <div><span>ORACLE</span><b id="oracle-age">—</b></div>
               </div>
               <div class="evidence" id="impact-evidence">
                 <b>✓</b>
                 <div>
-                  <b>Verified impact market</b
+                  <b>Signed oracle, venue-settled</b
                   ><span
-                    >Resolution via a multi-source evidence oracle.
-                    <a>View methodology</a></span
+                    >Price is the median of signed Gemini / Polymarket quotes;
+                    positions settle at 0¢ or 100¢ when the venue resolves.</span
                   >
                 </div>
               </div>
@@ -152,7 +155,7 @@
               <div class="trade-heading">
                 <div>
                   <span>ORDER TICKET</span>
-                  <b>TESTNET PREVIEW</b>
+                  <b id="ticket-state">TESTNET · MON MARGIN</b>
                 </div>
                 <i></i>
               </div>
@@ -162,17 +165,17 @@
                 ><button class="short" data-side="short">Short NO</button>
               </div>
               <div class="card-body">
-                <label>COLLATERAL <span>Monad USDC · 0.00</span></label>
+                <label>COLLATERAL <span id="balance">MON · —</span></label>
                 <div class="input-wrap">
-                  <input id="amount" value="250" inputmode="decimal" /><b
-                    >USDC</b
+                  <input id="amount" value="1" inputmode="decimal" /><b
+                    >MON</b
                   >
                 </div>
                 <div class="quick">
-                  <button data-amount="100">100</button
-                  ><button data-amount="500">500</button
-                  ><button data-amount="1000">1K</button
-                  ><button data-amount="2500">MAX</button>
+                  <button data-amount="1">1</button
+                  ><button data-amount="5">5</button
+                  ><button data-amount="10">10</button
+                  ><button data-amount="25">25</button>
                 </div>
                 <div class="leverage-label">
                   <label>LEVERAGE</label><b id="lev-value">3×</b>
@@ -182,24 +185,29 @@
                   id="leverage"
                   type="range"
                   min="1"
-                  max="50"
+                  max="25"
                   value="3"
                 />
                 <div class="lever-pills">
-                  <button>1×</button><button>5×</button><button>10×</button
-                  ><button>25×</button><button>50×</button>
+                  <button>1×</button><button>3×</button><button>5×</button
+                  ><button>10×</button><button>25×</button>
                 </div>
                 <div class="estimate">
                   <div><span>Position size</span><b id="notional"></b></div>
+                  <div><span>Entry price</span><b id="entry"></b></div>
                   <div><span>Est. liquidation</span><b id="liq"></b></div>
                   <div><span>Fee</span><b id="fee"></b></div>
                 </div>
                 <button class="trade-button long" id="trade">
                   Connect MetaMask to trade
                 </button>
+                <button class="trade-button long" id="list-market" hidden>
+                  List this market on-chain (owner)
+                </button>
                 <p class="notice" id="notice"></p>
                 <p class="risk">
-                  Demo only · 50× leverage can liquidate your full collateral.
+                  Testnet · unaudited. Leverage can liquidate your full
+                  collateral; entries are limited to 3¢–97¢.
                 </p>
               </div>
             </aside>
@@ -244,6 +252,92 @@
             </div>
           </section>
         </section>
+        <section class="app-screen" id="positions-screen" hidden>
+          <section class="markets-section">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">PORTFOLIO</p>
+                <h2>My positions</h2>
+                <p class="market-disclaimer" id="positions-status">
+                  Connect MetaMask to see your positions.
+                </p>
+              </div>
+              <span id="positions-summary"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Market</th><th>Side</th><th>Size</th><th>Margin</th
+                    ><th>Entry</th><th>Price</th><th>PnL</th><th>Funding</th
+                    ><th>Liq.</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="positions-body"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+        <section class="app-screen" id="house-screen" hidden>
+          <section class="markets-section">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">DEV · HOUSE</p>
+                <h2>House dashboard</h2>
+                <p class="market-disclaimer" id="house-status">
+                  Connect the owner wallet.
+                </p>
+              </div>
+              <span id="house-updated"></span>
+            </div>
+            <div class="kpis" id="house-kpis"></div>
+            <h3 class="table-title">Exposure by market</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Market</th><th>Index</th><th>Long OI</th><th>Short OI</th
+                    ><th>House net</th><th>If YES</th><th>If NO</th
+                    ><th>Oracle</th>
+                  </tr>
+                </thead>
+                <tbody id="house-markets"></tbody>
+              </table>
+            </div>
+            <h3 class="table-title">Open positions (all traders)</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th><th>Trader</th><th>Market</th><th>Side</th
+                    ><th>Size</th><th>Entry</th><th>Trader PnL</th
+                    ><th>House PnL</th><th>Health</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="house-positions"></tbody>
+              </table>
+            </div>
+            <h3 class="table-title">Recent trades</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Block</th><th>Event</th><th>#</th><th>Trader</th
+                    ><th>Market</th><th>Detail</th>
+                  </tr>
+                </thead>
+                <tbody id="house-feed"></tbody>
+              </table>
+            </div>
+            <h3 class="table-title">Vault</h3>
+            <div class="house-actions">
+              <input id="house-amount" inputmode="decimal" placeholder="MON" />
+              <button id="house-deposit">Deposit</button>
+              <button id="house-withdraw">Withdraw</button>
+              <span class="notice" id="house-notice"></span>
+            </div>
+          </section>
+        </section>
       </main>
       <footer id="docs">
         <span>© 2026 Impact Perps</span
@@ -251,6 +345,10 @@
         ><span>Not available where prohibited.</span>
       </footer>
     </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+    <script src="/src/config.js"></script>
+    <script src="/src/chain.js"></script>
     <script src="/src/main.js"></script>
+    <script src="/src/perps.js"></script>
   </body>
 </html>
