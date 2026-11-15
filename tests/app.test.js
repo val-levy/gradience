@@ -48,7 +48,7 @@ class Element {
   }
 }
 
-function createApp(fetch, ethereum) {
+function createApp(fetch, ethereum, Chain) {
   const elements = new Map();
   const getElement = (id) => {
     if (!elements.has(id)) elements.set(id, new Element(id));
@@ -157,9 +157,8 @@ function createApp(fetch, ethereum) {
     addEventListener() {},
   };
 
-  vm.runInNewContext(
-    readFileSyncMain,
-    {
+  const context = vm.createContext({
+      Chain,
       document,
       window,
       fetch,
@@ -179,11 +178,11 @@ function createApp(fetch, ethereum) {
       setInterval: () => 1,
       setTimeout,
       clearTimeout,
-    },
-    { filename: "src/main.js" },
-  );
+  });
+  vm.runInContext(readFileSyncMain, context, { filename: "src/main.js" });
 
   return {
+    run: (code) => vm.runInContext(code, context),
     elements,
     getElement,
     latestMarketElements: () => latestMarketElements,
@@ -247,7 +246,7 @@ test("imports open markets in batches and supports navigation, filtering, and tr
   });
   await app.waitForInitialFeed();
 
-  assert.equal(app.getElement("market-count").textContent, "204");
+  assert.equal(app.getElement("market-count").textContent, "200");
   assert.match(app.getElement("market-filters").innerHTML, /Sports/);
   assert.deepEqual(offsets, [0]);
 
@@ -267,7 +266,7 @@ test("imports open markets in batches and supports navigation, filtering, and tr
   );
 
   await app.getElement("load-more-markets").onclick();
-  assert.equal(app.getElement("market-count").textContent, "404");
+  assert.equal(app.getElement("market-count").textContent, "400");
   assert.deepEqual(offsets, [0, 100]);
 
   const importedCard = app
@@ -317,7 +316,7 @@ test("reports a feed error and retries the failed import", async () => {
 
   await app.getElement("load-more-markets").onclick();
   assert.equal(attempts, 2);
-  assert.equal(app.getElement("market-count").textContent, "05");
+  assert.equal(app.getElement("market-count").textContent, "01");
   assert.match(app.getElement("feed-status").textContent, /1 OPEN CONTRACTS/);
 });
 
@@ -351,7 +350,8 @@ test("connects MetaMask to Monad Testnet and reacts to wallet changes", async ()
     app.getElement("notice").textContent,
     /connected to Monad Testnet/i,
   );
-  assert.match(app.getElement("trade").textContent, /Long YES/);
+  // Reference-only (Gemini) markets can't be traded until listed on-chain.
+  assert.match(app.getElement("trade").textContent, /Not listed on-chain/);
 
   events.get("chainChanged")("0x1");
   assert.equal(app.getElement("wallet span").textContent, "Switch to Testnet");
@@ -359,4 +359,45 @@ test("connects MetaMask to Monad Testnet and reacts to wallet changes", async ()
 
   events.get("accountsChanged")([]);
   assert.equal(app.getElement("wallet span").textContent, "Connect MetaMask");
+});
+
+test("ticket math mirrors the contract: skewed entry and liquidation price", () => {
+  const app = createApp(async () => ({ ok: false, status: 503 }));
+  const m = { price: 50, oiCap: 1000, skew: 0.1, longOI: 0, shortOI: 0 };
+  app.run(`globalThis.m = ${JSON.stringify(m)}`);
+  assert.equal(app.run("entryPrice(m, true, 200)").toFixed(2), "52.00");
+  assert.equal(app.run("entryPrice(m, false, 200)").toFixed(2), "48.00");
+  assert.equal(app.run("liquidationPrice(50, true, 10)").toFixed(2), "45.50");
+  assert.equal(app.run("liquidationPrice(50, false, 10)").toFixed(2), "54.50");
+});
+
+test("trade button sends a real open with a 0.5c slippage limit", async () => {
+  const opens = [];
+  const provider = {
+    isMetaMask: true,
+    async request({ method }) {
+      return method === "eth_chainId" ? "0x279f" : method === "eth_requestAccounts" ? ["0xabc0000000000000"] : null;
+    },
+    on() {},
+  };
+  const Chain = {
+    async open(...args) {
+      opens.push(args.slice(1));
+      return "0x1234567890abcdef";
+    },
+    errorText: (e) => String(e),
+  };
+  const app = createApp(
+    async (url) => ({ ok: true, json: async () => marketFeedPage(Number(new URL(url).searchParams.get("offset")), 1) }),
+    provider,
+    Chain,
+  );
+  await app.waitForInitialFeed();
+  await app.getElement("wallet").onclick();
+  app.run(`markets[0].chainIdx = 7; active = markets[0]; active.price = 40;`);
+  app.getElement("amount").value = "2";
+  app.getElement("leverage").value = "5";
+  await app.getElement("trade").onclick();
+  assert.deepEqual(opens, [[7, true, 5, 2, 40.5]]); // idx, long, leverage, MON, entry 40c + 0.5c
+  assert.match(app.getElement("notice").textContent, /Position opened/);
 });
