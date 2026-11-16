@@ -289,7 +289,7 @@ $("#list-market").onclick = () => {
   act(
     "#notice",
     () => Chain.createMarket(walletProvider, { name: active.symbol, expiry, price, oiCap: 500, skew: 0.05, funding: 0.1 }),
-    "Listed. Add its venue ids to scripts/keeper.markets.json so the keeper quotes it.",
+    "Listed. The oracle keeper quotes it automatically (market name = Gemini symbol).",
   );
 };
 document.addEventListener("click", (e) => {

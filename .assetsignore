@@ -8,7 +8,10 @@ wrangler.jsonc
 contracts/
 node_modules/
 .wrangler/
+.claude/
+.git/
 scripts/
+worker/
 test/
 tests/
 out/

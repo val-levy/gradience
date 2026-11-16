@@ -2,6 +2,9 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "impact-perps",
   "compatibility_date": "2026-11-15",
+  "main": "worker/oracle.mjs",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": { "crons": ["* * * * *"] },
   "workers_dev": true,
   "assets": {
     "directory": ".",
