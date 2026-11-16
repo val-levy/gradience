@@ -40,15 +40,19 @@ let active = NO_MARKET,
   chartType = "line",
   marketCategory = "All",
   marketSearch = "",
-  visibleMarketCount = 24,
+  visibleMarketCount = 15,
   feedOffset = 0,
   feedTotal = Infinity,
   feedLoading = false,
   feedError = false;
 const initialMarketCount = markets.length;
+const symbolInfo = {}; // Gemini symbol -> imported market (title, tag, volume) for naming on-chain markets
+const livePrice = {}; // Gemini symbol -> live YES price in cents, polled straight from Gemini
+let shownMarkets = []; // cards currently on the Markets grid (polled for live prices)
+const symOf = (m) => m.symbol ?? (m.chainIdx !== undefined ? m.name : undefined);
 const chartSamples = { "1D": 24, "1W": 40, "1M": 54, ALL: 64 };
 const feedPageSize = 100;
-const marketPageSize = 24;
+const marketPageSize = 15; // 5 rows of the 3-column grid
 const chartLabels = {
   "1D": ["00:00", "06:00", "12:00", "18:00", "NOW"],
   "1W": ["-7D", "-5D", "-3D", "-1D", "NOW"],
@@ -178,7 +182,7 @@ function createHistory(market) {
 }
 function renderChart() {
   if (!active.history) active.history = createHistory(active);
-  const values = active.history.slice(-chartSamples[chartRange]);
+  const values = active.liveHist ? active.history : active.history.slice(-chartSamples[chartRange]);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const spread = max - min || 1;
@@ -258,7 +262,14 @@ function renderMarkets() {
         .includes(query);
     return matchesCategory && matchesQuery;
   });
+  // Relevance: 24h volume first, then the most contested price (closest to 50¢).
+  visibleMarkets.sort(
+    (a, b) =>
+      (b.volumeNum ?? 0) - (a.volumeNum ?? 0) ||
+      Math.abs(a.price - 50) - Math.abs(b.price - 50),
+  );
   const page = visibleMarkets.slice(0, visibleMarketCount);
+  shownMarkets = page;
   $("#market-grid").innerHTML = page.length
     ? page
         .map(
@@ -568,6 +579,7 @@ async function loadGeminiMarkets() {
                     maximumFractionDigits: 1,
                   }).format(volume)
                 : "—",
+              volumeNum: Number.isFinite(volume) ? volume : 0,
               demo: false,
             };
           }),
@@ -580,6 +592,12 @@ async function loadGeminiMarkets() {
           !existingIds.has(market.id),
       );
     markets.push(...imported);
+    // The contract only stores the Gemini symbol; remember the human title so on-chain markets can show it.
+    for (const m of imported) symbolInfo[m.symbol] = m;
+    for (const m of markets) {
+      const info = m.chainIdx !== undefined && symbolInfo[m.name];
+      if (info) Object.assign(m, { title: info.title, tag: info.tag, volume: info.volume, volumeNum: info.volumeNum });
+    }
     visibleMarketCount += marketPageSize;
     $("#feed-status").textContent =
       `GEMINI PUBLIC DATA · ${markets.length - initialMarketCount} OPEN CONTRACTS`;
@@ -595,6 +613,59 @@ async function loadGeminiMarkets() {
     render();
   }
 }
+// Live display prices: Gemini's per-event endpoint is light (≈30 KB) and allows browser calls. Same mid-or-last rule
+// as the keeper. This is display only; trades fill at the on-chain oracle index.
+// Price history: Gemini's /v2/candles also serves GEMI- prediction contracts (undocumented for them; covers ~the last
+// 22h at most). Candles are newest-first, [ms, open, high, low, close, volume].
+async function loadGeminiHistory(m) {
+  m.histLoaded = true; // set first so the 1s poll doesn't refetch while this is in flight
+  try {
+    const r = await fetch(`https://api.gemini.com/v2/candles/${symOf(m)}/15m`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) throw Error(`HTTP ${r.status}`);
+    const closes = (await r.json()).map((c) => c[4] * 100).reverse();
+    if (closes.length < 2) return;
+    m.history = closes;
+    m.liveHist = true;
+    m.move = Number((((m.price - closes[0]) / Math.max(closes[0], 0.01)) * 100).toFixed(2));
+    if (active === m) render();
+  } catch {
+    m.histLoaded = false; // retry on the next poll
+  }
+}
+let polling = false;
+async function pollLive() {
+  if (document.hidden || polling) return; // skip while the previous poll is still in flight
+  polling = true;
+  try {
+    await pollLiveOnce();
+  } finally {
+    polling = false;
+  }
+}
+async function pollLiveOnce() {
+  if (symOf(active) && !active.histLoaded) loadGeminiHistory(active);
+  const tickers = [...new Set([active, ...shownMarkets].map(symOf).filter(Boolean).map((s) => s.split("-")[1]))].slice(0, 12);
+  await Promise.all(
+    tickers.map(async (t) => {
+      try {
+        const r = await fetch(`https://api.gemini.com/v1/prediction-markets/events/${t}`, { signal: AbortSignal.timeout(8000) });
+        if (!r.ok) return;
+        for (const c of (await r.json()).contracts ?? []) {
+          if (c.resolutionSide) continue;
+          const { bestBid, bestAsk, lastTradePrice } = c.prices ?? {};
+          const bid = Number(bestBid), ask = Number(bestAsk);
+          const p = (bid > 0 && ask > 0 && ask - bid <= 0.1 ? (bid + ask) / 2 : Number(lastTradePrice)) * 100;
+          if (p > 0 && p < 100) livePrice[c.instrumentSymbol] = p;
+        }
+      } catch {} // next tick retries
+    }),
+  );
+  for (const m of markets) if (!m.settled && livePrice[symOf(m)] !== undefined) m.price = livePrice[symOf(m)];
+  if (active.liveHist) active.history[active.history.length - 1] = active.price; // chart tip follows the live price
+  render();
+}
+setInterval(pollLive, 1000);
+setTimeout(pollLive, 1500);
 setInterval(() => {
   if (!active.demo) return;
   const delta = (Math.random() - 0.46) * 0.18;

@@ -263,7 +263,7 @@ test("imports open markets in batches and supports navigation, filtering, and tr
   assert.equal(
     (app.getElement("market-grid").innerHTML.match(/class="market-card/g) ?? [])
       .length,
-    72,
+    45, // three pages of 15 (5 rows × 3 columns)
   );
 
   await app.getElement("load-more-markets").onclick();

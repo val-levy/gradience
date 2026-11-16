@@ -9,7 +9,10 @@ let chainMarkets = [],
 const fmt = (n, d = 3) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const signed = (n) => `<b class="${n >= 0 ? "up" : "down"}">${n >= 0 ? "+" : ""}${fmt(n)}</b>`;
-const marketName = (idx) => escapeHTML(chainMarkets[idx]?.name ?? `#${idx}`);
+const marketName = (idx) => {
+  const n = chainMarkets[idx]?.name;
+  return escapeHTML(n === undefined ? `#${idx}` : (symbolInfo[n]?.title ?? n));
+};
 const isOwner = () =>
   Boolean(houseInfo && walletAddress && houseInfo.owner.toLowerCase() === walletAddress.toLowerCase());
 const age = (t) => {
@@ -33,14 +36,15 @@ function toUiMarket(m) {
     chainIdx: m.idx,
     name: m.name,
     group: status,
-    title: m.name,
-    tag: m.name.slice(0, 11),
-    price: m.mark,
+    title: symbolInfo[m.name]?.title ?? m.name,
+    tag: symbolInfo[m.name]?.tag ?? m.name.slice(0, 11),
+    price: !m.settled && livePrice[m.name] !== undefined ? livePrice[m.name] : m.mark, // live Gemini price, else oracle mark
     index: m.index, // oracle index, without skew impact (entry price is derived from this)
     move: old?.move ?? 0,
     liquidity: `${fmt(m.longOI + m.shortOI)} MON`,
     expiry: new Date(m.expiry * 1000).toISOString().slice(0, 10),
-    volume: "—",
+    volume: symbolInfo[m.name]?.volume ?? "—",
+    volumeNum: symbolInfo[m.name]?.volumeNum ?? 0,
     demo: false,
     longOI: m.longOI,
     shortOI: m.shortOI,
@@ -82,6 +86,7 @@ function paintMarketExtras() {
 async function onMarketSelected(m) {
   paintMarketExtras();
   if (m?.chainIdx === undefined || !Chain.enabled()) return;
+  if (symOf(m)) return; // Gemini candles (main.js) are the history source; no on-chain log scan needed
   try {
     const hist = await Chain.priceHistory(m.chainIdx);
     if (hist.length > 1) {
@@ -186,7 +191,7 @@ async function renderHouse() {
           const ifYes = -ps.reduce((s, p) => s + payoffAt(p, 100), 0);
           const ifNo = -ps.reduce((s, p) => s + payoffAt(p, 0), 0);
           const net = m.longOI - m.shortOI;
-          return `<tr><td>${escapeHTML(m.name)}${m.settled ? " (settled)" : ""}</td>
+          return `<tr><td>${escapeHTML(symbolInfo[m.name]?.title ?? m.name)}${m.settled ? " (settled)" : ""}</td>
             <td>${m.mark.toFixed(2)}¢</td><td>${fmt(m.longOI)}</td><td>${fmt(m.shortOI)}</td>
             <td>${net === 0 ? "flat" : net > 0 ? `short ${fmt(net)}` : `long ${fmt(-net)}`}</td>
             <td>${signed(ifYes)}</td><td>${signed(ifNo)}</td>
