@@ -3,6 +3,7 @@
 let chainMarkets = [],
   houseInfo = null,
   buyingPower = null, // wallet MON balance; null until loaded
+  myOpen = [], // the connected wallet's open positions
 
   refreshing = false;
 
@@ -67,7 +68,23 @@ function syncChainMarkets(list) {
   else if (active === NO_MARKET && fresh.length) active = fresh[0];
 }
 
+// "Your position" card on the trade screen for the active market.
+function paintMyPosition() {
+  const el = $("#my-position");
+  const ps = active.chainIdx === undefined ? [] : myOpen.filter((p) => p.marketIdx === active.chainIdx);
+  el.hidden = !ps.length;
+  el.innerHTML = ps.length
+    ? `<div>${ps
+        .map(
+          (p) =>
+            `<b>Your position · ${p.isLong ? "LONG YES" : "SHORT NO"}</b><span>${fmt(p.notional)} MON size · ${fmt(p.collateral)} MON margin · entry ${p.entry.toFixed(2)}¢ · P&amp;L ${signed(p.pnl)} MON${p.liquidatable ? " · AT RISK" : ""} · close it under My positions</span>`,
+        )
+        .join("")}</div>`
+    : "";
+}
+
 function paintMarketExtras() {
+  paintMyPosition();
   const a = active;
   const onChain = a.chainIdx !== undefined;
   $("#funding").textContent = onChain ? `${fmt(a.fundingPerDay * 100, 2)}%` : "—";
@@ -112,6 +129,8 @@ async function renderPositions() {
     status.textContent = "Connect MetaMask to see your positions.";
     body.innerHTML = "";
     $("#portfolio-kpis").innerHTML = "";
+    myOpen = [];
+    paintMyPosition();
     return;
   }
   let all, bal;
@@ -122,6 +141,7 @@ async function renderPositions() {
     return;
   }
   const mine = all.filter((p) => p.open);
+  myOpen = mine;
   buyingPower = bal;
   $("#balance").textContent = `Buying power · ${fmt(bal, 4)} MON`;
   status.textContent = `${short(walletAddress)} · ${mine.length} open, ${all.length - mine.length} closed`;
@@ -139,7 +159,7 @@ async function renderPositions() {
     ? mine
         .map((p) => {
           const m = chainMarkets[p.marketIdx];
-          return `<tr>
+          return `<tr class="pos-row" data-open-market="${p.marketIdx}" title="Open this market">
             <td>${marketName(p.marketIdx)}</td>
             <td><b class="${p.isLong ? "up" : "down"}">${p.isLong ? "LONG YES" : "SHORT NO"}</b></td>
             <td>${fmt(p.notional)}</td><td>${fmt(p.collateral)}</td>
@@ -150,6 +170,19 @@ async function renderPositions() {
         })
         .join("")
     : `<tr><td colspan="10">No open positions. Pick a market and open one.</td></tr>`;
+  // Click a row (not its Close button) to jump to that market's trade screen.
+  $$("[data-open-market]").forEach((row) => {
+    row.onclick = (e) => {
+      if (e.target.closest("button")) return;
+      const m = markets.find((x) => x.chainIdx === Number(row.dataset.openMarket));
+      if (!m) return;
+      active = m;
+      render();
+      showScreen("trade");
+      onMarketSelected(active);
+    };
+  });
+  paintMyPosition();
 }
 
 // ── House dashboard ──

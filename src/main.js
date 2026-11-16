@@ -489,6 +489,18 @@ $("#trade").onclick = async () => {
   if (typeof buyingPower === "number" && amount > buyingPower)
     return notice(`Not enough MON: you have ${buyingPower.toFixed(4)}, this trade needs ${amount}.`);
   try {
+    // The contract reverts with "house capacity" when the most this trade can win exceeds the house's free liquidity.
+    const notional = amount * Number($("#leverage").value);
+    const e = entryPrice(active, side === "long", notional) / 100;
+    const win = side === "long" ? (notional * (1 - e)) / e : (notional * e) / (1 - e);
+    const { free } = await Chain.house();
+    if (win > free)
+      return notice(
+        `House capacity: this could win up to ${win.toFixed(2)} MON but the house has ${free.toFixed(2)} MON free. ` +
+          `Max size here is about ${((notional * free) / win).toFixed(2)} MON (lower the collateral or leverage), or the owner can deposit more on the House screen.`,
+      );
+  } catch {} // can't read the house: let the contract decide
+  try {
     $("#trade").disabled = true;
     notice("Confirm the transaction in MetaMask…");
     const hash = await Chain.open(
