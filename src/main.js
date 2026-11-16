@@ -80,9 +80,10 @@ function refreshWalletUI() {
   const label = connected
     ? walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4)
     : walletAddress
-      ? "Switch to Testnet"
+      ? "Switch network"
       : "Connect MetaMask";
   $("#wallet span").textContent = label;
+  $("#netname").textContent = NETWORK.chainName;
   $("#trade").textContent = tradeLabel();
   if (typeof onWalletChange === "function") onWalletChange();
 }
@@ -125,7 +126,7 @@ async function switchToMonadTestnet(provider) {
     typeof chainId !== "string" ||
     chainId.toLowerCase() !== NETWORK.chainId
   ) {
-    throw Error("MetaMask must be connected to Monad Testnet.");
+    throw Error(`MetaMask must be connected to ${NETWORK.chainName}.`);
   }
   return chainId.toLowerCase();
 }
@@ -140,7 +141,7 @@ function registerWalletEvents(provider) {
     $("#notice").textContent = connected
       ? "MetaMask account updated."
       : walletAddress
-        ? "Switch MetaMask to Monad Testnet."
+        ? `Switch MetaMask to ${NETWORK.chainName}.`
         : "MetaMask disconnected.";
   });
   handleWalletEvent(provider, "chainChanged", (chainId) => {
@@ -149,8 +150,8 @@ function registerWalletEvents(provider) {
       Boolean(walletAddress) && walletChainId === NETWORK.chainId;
     refreshWalletUI();
     $("#notice").textContent = connected
-      ? "Connected to Monad Testnet."
-      : "Switch MetaMask to Monad Testnet to trade.";
+      ? `Connected to ${NETWORK.chainName}.`
+      : `Switch MetaMask to ${NETWORK.chainName} to trade.`;
   });
 }
 function escapeHTML(value) {
@@ -364,12 +365,33 @@ $("#wallet").onclick = async () => {
     connected = true;
     registerWalletEvents(provider);
     refreshWalletUI();
-    $("#notice").textContent = "MetaMask connected to Monad Testnet.";
+    try {
+      localStorage.setItem("perps.wallet", "1"); // remember the session so a reload reconnects silently
+    } catch {}
+    $("#notice").textContent = `MetaMask connected to ${NETWORK.chainName}.`;
   } catch (error) {
     $("#notice").textContent =
       error instanceof Error ? error.message : "MetaMask connection failed.";
   }
 };
+// After a reload, silently restore the session (eth_accounts shows no prompt) if the user connected before.
+async function restoreWallet() {
+  try {
+    if (localStorage.getItem("perps.wallet") !== "1") return;
+    const provider = getMetaMaskProvider();
+    const [accounts, chainId] = await Promise.all([
+      provider.request({ method: "eth_accounts" }),
+      provider.request({ method: "eth_chainId" }),
+    ]);
+    if (!accounts?.[0]) return;
+    walletAddress = accounts[0];
+    walletChainId = String(chainId).toLowerCase();
+    connected = walletChainId === NETWORK.chainId;
+    registerWalletEvents(provider);
+    refreshWalletUI();
+  } catch {} // no MetaMask / no storage: stay disconnected
+}
+$(".network").onclick = () => $("#wallet").onclick();
 $("#menu").onclick = () => $("nav").classList.toggle("open");
 $$("[data-screen], [data-screen-target]").forEach((link) => {
   link.onclick = (event) => {
@@ -443,13 +465,18 @@ $$(".lever-pills button").forEach(
       $("#leverage").oninput();
     }),
 );
+const walletOnNetwork = () => walletChainId === NETWORK.chainId;
 $("#trade").onclick = async () => {
   const notice = (text) => ($("#notice").textContent = text);
   if (!connected) return $("#wallet").onclick();
   if (active.chainIdx === undefined)
     return notice("This market is not listed on-chain yet.");
   const amount = Number($("#amount").value);
+  if (active.settled) return notice("This market has settled; it no longer accepts trades.");
+  if (!walletOnNetwork()) return notice(`Switch MetaMask to ${NETWORK.chainName}.`);
   if (!(amount > 0)) return notice("Enter a collateral amount.");
+  if (typeof buyingPower === "number" && amount > buyingPower)
+    return notice(`Not enough MON: you have ${buyingPower.toFixed(4)}, this trade needs ${amount}.`);
   try {
     $("#trade").disabled = true;
     notice("Confirm the transaction in MetaMask…");
@@ -486,6 +513,7 @@ async function loadGeminiMarkets() {
   try {
     const response = await fetch(
       `https://api.gemini.com/v1/prediction-markets/events?limit=${feedPageSize}&offset=${feedOffset}`,
+      { signal: AbortSignal.timeout(10000) }, // never leave the button stuck on "Importing…"
     );
     if (!response.ok) {
       throw Error(`Gemini feed returned HTTP ${response.status}.`);
@@ -582,4 +610,6 @@ setInterval(() => {
 const initialScreen = window.location.hash.slice(1);
 showScreen(initialScreen || "overview", false);
 render();
+$("#netname").textContent = NETWORK.chainName;
 loadGeminiMarkets();
+restoreWallet();

@@ -166,7 +166,10 @@ const Chain = (() => {
       return tx.hash;
     },
     errorText(error) {
-      return error?.reason || error?.shortMessage || error?.info?.error?.message || error?.message || "Transaction failed.";
+      if (error?.code === "INSUFFICIENT_FUNDS") return "Insufficient MON balance for this trade plus gas.";
+      const text = error?.reason || error?.shortMessage || error?.info?.error?.message || error?.message || "Transaction failed.";
+      // ethers reports a failed gas estimate with no reason this way; an empty wallet is the usual cause.
+      return /missing revert data/i.test(text) ? "Transaction would revert (check your MON balance and the market is open)." : text;
     },
   };
 })();

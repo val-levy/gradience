@@ -163,6 +163,7 @@ function createApp(fetch, ethereum, Chain) {
       window,
       fetch,
       URL,
+      AbortSignal,
       console: { ...console, error() {} },
       Math,
       Intl,
@@ -354,7 +355,7 @@ test("connects MetaMask to Monad Testnet and reacts to wallet changes", async ()
   assert.match(app.getElement("trade").textContent, /Not listed on-chain/);
 
   events.get("chainChanged")("0x1");
-  assert.equal(app.getElement("wallet span").textContent, "Switch to Testnet");
+  assert.equal(app.getElement("wallet span").textContent, "Switch network");
   assert.match(app.getElement("trade").textContent, /Connect MetaMask/);
 
   events.get("accountsChanged")([]);

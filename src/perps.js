@@ -2,6 +2,8 @@
 // Shares globals (markets, active, walletAddress, connected, walletProvider, render…) with main.js.
 let chainMarkets = [],
   houseInfo = null,
+  buyingPower = null, // wallet MON balance; null until loaded
+
   refreshing = false;
 
 const fmt = (n, d = 3) => Number(n).toLocaleString(undefined, { maximumFractionDigits: d });
@@ -104,15 +106,30 @@ async function renderPositions() {
   if (!walletAddress) {
     status.textContent = "Connect MetaMask to see your positions.";
     body.innerHTML = "";
+    $("#portfolio-kpis").innerHTML = "";
     return;
   }
-  const all = await Chain.userPositions(walletAddress);
+  let all, bal;
+  try {
+    [all, bal] = await Promise.all([Chain.userPositions(walletAddress), Chain.balance(walletAddress)]);
+  } catch (error) {
+    status.textContent = `Could not load your positions: ${Chain.errorText(error)}`;
+    return;
+  }
   const mine = all.filter((p) => p.open);
-  const bal = await Chain.balance(walletAddress);
-  $("#balance").textContent = `MON · ${fmt(bal, 4)}`;
+  buyingPower = bal;
+  $("#balance").textContent = `Buying power · ${fmt(bal, 4)} MON`;
   status.textContent = `${short(walletAddress)} · ${mine.length} open, ${all.length - mine.length} closed`;
   const total = mine.reduce((s, p) => s + p.pnl - p.funding, 0);
+  const posValue = mine.reduce((s, p) => s + p.equity, 0); // margin + PnL - funding, what closing now would return
   $("#positions-summary").innerHTML = `Unrealized ${signed(total)} MON`;
+  const kpi = (label, value, cls = "") => `<div><span>${label}</span><b class="${cls}">${value}</b></div>`;
+  $("#portfolio-kpis").innerHTML = [
+    kpi("NET WORTH", `${fmt(bal + posValue, 4)} MON`),
+    kpi("BUYING POWER", `${fmt(bal, 4)} MON`),
+    kpi("POSITIONS", `${fmt(posValue, 4)} MON · ${mine.length} open`),
+    kpi("UNREALIZED P&L", `${total >= 0 ? "+" : ""}${fmt(total, 4)} MON`, total >= 0 ? "up" : "down"),
+  ].join("");
   body.innerHTML = mine.length
     ? mine
         .map((p) => {
@@ -136,7 +153,13 @@ async function renderHouse() {
     $("#house-status").textContent = "No contract configured. Run scripts/deploy.mjs, then reload.";
     return;
   }
-  const [h, positions, feed] = await Promise.all([Chain.house(), Chain.allPositions(), Chain.feed()]);
+  let h, positions, feed;
+  try {
+    [h, positions, feed] = await Promise.all([Chain.house(), Chain.allPositions(), Chain.feed()]);
+  } catch (error) {
+    $("#house-status").textContent = `Could not load house data: ${Chain.errorText(error)}`;
+    return;
+  }
   houseInfo = h;
   const open = positions.filter((p) => p.open);
   const stale = chainMarkets.filter((m) => !m.settled && m.priceTime && Date.now() / 1000 - m.priceTime > h.maxStale);
@@ -215,7 +238,9 @@ async function refreshAll() {
     else $("#house-nav").hidden = !isOwner();
   } catch (error) {
     console.error("refresh failed", error);
-    $("#notice").textContent = Chain.errorText(error);
+    const msg = `Could not reach the chain: ${Chain.errorText(error)}`;
+    $("#notice").textContent = msg;
+    $("#positions-status").textContent = msg;
   } finally {
     refreshing = false;
   }
@@ -239,16 +264,21 @@ async function act(el, work, doneText) {
 document.addEventListener("click", (event) => {
   const t = event.target;
   if (!(t instanceof HTMLElement)) return;
-  if (!connected && (t.dataset.close || t.dataset.liquidate)) return report("#notice", "Connect MetaMask first.");
-  if (t.dataset.close) act("#positions-status", () => Chain.close(walletProvider, Number(t.dataset.close)), "Position closed.");
+  if (!connected && (t.dataset.close || t.dataset.liquidate))
+    return report(t.dataset.close ? "#positions-notice" : "#house-notice", "Connect MetaMask first.");
+  if (t.dataset.close) act("#positions-notice", () => Chain.close(walletProvider, Number(t.dataset.close)), "Position closed.");
   if (t.dataset.liquidate) act("#house-notice", () => Chain.liquidate(walletProvider, Number(t.dataset.liquidate)), "Liquidated.");
 });
 $("#house-deposit").onclick = () => {
   if (!connected) return report("#house-notice", "Connect the owner wallet.");
+  if (!isOwner()) return report("#house-notice", "Only the contract owner can deposit.");
+  if (!(Number($("#house-amount").value) > 0)) return report("#house-notice", "Enter an amount in MON.");
   act("#house-notice", () => Chain.deposit(walletProvider, Number($("#house-amount").value)), "Deposited.");
 };
 $("#house-withdraw").onclick = () => {
   if (!connected) return report("#house-notice", "Connect the owner wallet.");
+  if (!(Number($("#house-amount").value) > 0)) return report("#house-notice", "Enter an amount in MON.");
+  if (!isOwner()) return report("#house-notice", "Only the contract owner can withdraw.");
   act("#house-notice", () => Chain.withdraw(walletProvider, Number($("#house-amount").value)), "Withdrawn.");
 };
 // Owner lists a Gemini contract as a perp. Defaults are deliberately conservative: 5c skew, 10%/day funding at full skew.

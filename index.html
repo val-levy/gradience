@@ -25,7 +25,7 @@
           <a href="#house" data-screen="house" id="house-nav" hidden>House</a>
         </nav>
         <div class="header-actions">
-          <button class="network" type="button"><i></i>Monad Testnet</button
+          <button class="network" type="button"><i></i><span id="netname">Monad Testnet</span></button
           ><button class="wallet" id="wallet">
             ▣ <span>Connect MetaMask</span></button
           ><button class="mobile-menu" id="menu">☰</button>
@@ -42,10 +42,10 @@
                 Built for conviction, settled by evidence.
               </p>
               <div class="hero-actions">
-                <a class="button-primary" href="#markets-section"
+                <a class="button-primary" href="#markets" data-screen-target="markets"
                   >Explore markets <span>↓</span></a
                 >
-                <a class="button-secondary" href="#trading-terminal"
+                <a class="button-secondary" href="#trade" data-screen-target="trade"
                   >Open trading terminal <span>↗</span></a
                 >
               </div>
@@ -88,7 +88,6 @@
                   <div class="market-tag" id="tag"></div>
                   <h2 id="title"></h2>
                 </div>
-                <button class="more">•••</button>
               </div>
               <div class="price-row">
                 <div>
@@ -264,6 +263,8 @@
               </div>
               <span id="positions-summary"></span>
             </div>
+            <div class="kpis" id="portfolio-kpis"></div>
+            <p class="notice" id="positions-notice"></p>
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
