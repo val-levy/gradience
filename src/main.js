@@ -262,9 +262,10 @@ function renderMarkets() {
         .includes(query);
     return matchesCategory && matchesQuery;
   });
-  // Relevance: 24h volume first, then the most contested price (closest to 50¢).
+  // Tradable on-chain perps first, then relevance: 24h volume, then the most contested price (closest to 50¢).
   visibleMarkets.sort(
     (a, b) =>
+      (b.chainIdx !== undefined) - (a.chainIdx !== undefined) ||
       (b.volumeNum ?? 0) - (a.volumeNum ?? 0) ||
       Math.abs(a.price - 50) - Math.abs(b.price - 50),
   );
