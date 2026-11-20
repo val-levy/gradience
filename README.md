@@ -1,4 +1,4 @@
-# Impact Perps — perps on prediction markets (Monad)
+# Gradience — perps on prediction markets
 
 Leveraged long/short on the probability (0–100¢) of a prediction-market outcome. Margin is MON. A house vault is the counterparty; prices come from a signed multi-venue oracle (Gemini + Polymarket); markets settle at exactly 0¢ or 100¢ when the venue resolves.
 

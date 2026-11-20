@@ -1,4 +1,4 @@
-# Impact Perps — team brain
+# Gradience — team brain
 
 Perps on prediction markets, on Monad. Traders go long/short the probability (0–100¢) of an outcome listed on Gemini/Polymarket, with MON margin and up to 25× leverage. A house vault is the counterparty. Prices come from a signed multi-venue oracle; markets settle at exactly 0¢ or 100¢ when the venue resolves.
 

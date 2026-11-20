@@ -1,12 +1,12 @@
 {
-  "name": "impact-perps",
+  "name": "gradience",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 8000 --bind 127.0.0.1",
     "build:site": "rm -rf dist && mkdir dist && cp -R index.html src dist/",
-    "deploy:pages": "npm run build:site && wrangler pages deploy dist --project-name impact-perps-demo",
+    "deploy:pages": "npm run build:site && wrangler pages deploy dist --project-name gradience",
     "build": "node --check src/main.js",
     "preview": "python3 -m http.server 4173",
     "deploy": "wrangler deploy",
