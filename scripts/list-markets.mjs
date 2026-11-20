@@ -12,9 +12,25 @@ const dry = process.argv.includes("--dry");
 const d = deployment();
 const perps = new ethers.Contract(d.address, artifact().abi, dry ? provider() : new ethers.Wallet(need("DEPLOYER_KEY"), provider()));
 
-const r = await fetch("https://api.gemini.com/v1/prediction-markets/events?limit=500", { signal: AbortSignal.timeout(20000) });
-if (!r.ok) throw Error(`Gemini → HTTP ${r.status}`);
-const events = (await r.json()).data;
+// Paged + retried: one 500-event response is ~14 MB and Gemini sometimes drops the connection mid-download.
+async function eventsPage(offset) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const r = await fetch(`https://api.gemini.com/v1/prediction-markets/events?limit=100&offset=${offset}`, { signal: AbortSignal.timeout(60000) });
+      if (!r.ok) throw Error(`Gemini → HTTP ${r.status}`);
+      return (await r.json()).data || [];
+    } catch (e) {
+      if (attempt >= 3) throw e;
+      console.warn(`Gemini page ${offset} failed (${e.message}), retrying`);
+    }
+  }
+}
+const events = [];
+for (let offset = 0; offset < 2000; offset += 100) {
+  const page = await eventsPage(offset);
+  events.push(...page);
+  if (page.length < 100) break;
+}
 
 const listed = new Set();
 for (let i = 0, n = Number(await perps.marketCount()); i < n; i++) listed.add((await perps.markets(i)).name);
