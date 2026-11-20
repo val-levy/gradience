@@ -1,9 +1,9 @@
 window.PERPS_CONFIG = {
-  "address": "0x5b3A5751eB6a74636Ae647C0F63D098D8fF4C1F7",
+  "address": "0x981858b70D80Cb5b456c789f1609efdcb135551E",
   "chainId": 10143,
-  "deployBlock": 80080660,
+  "deployBlock": 81191523,
   "rpcUrl": "https://testnet-rpc.monad.xyz",
-  "owner": "0x3D559dD65b48AAbF238d2FAB5640a38a97be600f",
+  "owner": "0x4597CdA1E6cFbEc74aEAFb022712d82A0E205Ced",
   "abi": [
     {
       "type": "constructor",
