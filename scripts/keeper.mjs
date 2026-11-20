@@ -1,5 +1,5 @@
 // Oracle keeper (local process). Logic lives in keeper-core.mjs; the hosted version is worker/oracle.mjs.
-// Usage: RELAYER_KEY=0x… SIGNER_KEYS=0xk1,0xk2,0xk3 SIGNER_VENUES=gemini,polymarket,gemini node scripts/keeper.mjs [--once]
+// Usage: [HEARTBEAT_S=600] RELAYER_KEY=0x… SIGNER_KEYS=0xk1,0xk2,0xk3 SIGNER_VENUES=gemini,polymarket,gemini node scripts/keeper.mjs [--once]
 // ponytail: one process holds all signer keys for convenience. For real trust-minimisation run one keeper per signer on separate infra.
 import { readFileSync, existsSync } from "node:fs";
 import { artifact, deployment, need, provider } from "./lib.mjs";
@@ -15,6 +15,7 @@ const venues = need("SIGNER_VENUES").split(",").map((v) => v.trim());
 const { relayer, signers, cycle } = createKeeper({
   address: d.address, chainId: d.chainId, abi: artifact().abi, provider: provider(),
   relayerKey: need("RELAYER_KEY"), signerKeys: need("SIGNER_KEYS").split(",").map((k) => k.trim()), venues, mapping,
+  heartbeat: Number(process.env.HEARTBEAT_S || 60), // e.g. 600 when the contract's maxStale is 1800; saves gas
 });
 
 console.log(`Keeper → ${d.address} (relayer ${relayer.address}, ${signers.length} signers: ${signers.map((k, i) => `${venues[i]}:${k.address.slice(0, 8)}`).join(" ")})`);

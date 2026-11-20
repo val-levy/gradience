@@ -50,7 +50,8 @@ const toWei = (x) => ethers.parseUnits(Math.min(0.999, Math.max(0.001, x)).toFix
 
 /** mapping: optional { "<on-chain market name>": { gemini, polymarket } } overrides.
  *  → { relayer, signers: Wallet[], cycle(): Promise<void> } */
-export function createKeeper({ address, chainId, abi, provider, relayerKey, signerKeys, venues, mapping = {} }) {
+// heartbeat: seconds after which an unchanged price is re-sent anyway; must stay well under the contract's maxStale.
+export function createKeeper({ address, chainId, abi, provider, relayerKey, signerKeys, venues, mapping = {}, heartbeat = 60 }) {
   if (signerKeys.length !== venues.length) throw Error("SIGNER_KEYS and SIGNER_VENUES must have the same length");
   const relayer = new ethers.Wallet(relayerKey, provider);
   const signers = signerKeys.map((k) => new ethers.Wallet(k));
@@ -82,7 +83,7 @@ export function createKeeper({ address, chainId, abi, provider, relayerKey, sign
       const age = block.timestamp - Number(m.priceTime);
       const median = quotes.map((q) => q.price).sort((a, b) => a - b)[Math.floor(quotes.length / 2)];
       const moved = Math.abs(median - Number(m.indexPrice) / 1e18) >= 0.005;
-      if (!finalized && !moved && age < 60) continue; // no change, still fresh
+      if (!finalized && !moved && age < heartbeat) continue; // no change, still fresh
 
       const ups = [];
       for (const q of quotes) {
