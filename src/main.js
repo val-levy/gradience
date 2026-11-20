@@ -47,6 +47,9 @@ let active = NO_MARKET,
   feedError = false;
 const initialMarketCount = markets.length;
 const symbolInfo = {}; // Gemini symbol -> imported market (title, tag, volume) for naming on-chain markets
+// Seed from the shipped name list so on-chain markets have titles before any Gemini request returns.
+for (const [symbol, title] of Object.entries(window.MARKET_NAMES ?? {}))
+  symbolInfo[symbol] = { title, tag: symbol.slice(symbol.lastIndexOf("-") + 1).slice(0, 11) };
 const livePrice = {}; // Gemini symbol -> live YES price in cents, polled straight from Gemini
 let shownMarkets = []; // cards currently on the Markets grid (polled for live prices)
 const symOf = (m) => m.symbol ?? (m.chainIdx !== undefined ? m.name : undefined);
@@ -537,7 +540,7 @@ async function loadGeminiMarkets() {
   try {
     const response = await fetch(
       `https://api.gemini.com/v1/prediction-markets/events?limit=${feedPageSize}&offset=${feedOffset}`,
-      { signal: AbortSignal.timeout(10000) }, // never leave the button stuck on "Importing…"
+      { signal: AbortSignal.timeout(30000) }, // ~3 MB per page; slow links need >10 s. Still bounded so "Importing…" can't stick.
     );
     if (!response.ok) {
       throw Error(`Gemini feed returned HTTP ${response.status}.`);
