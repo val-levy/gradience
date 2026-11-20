@@ -662,7 +662,13 @@ async function pollLiveOnce() {
       try {
         const r = await fetch(`https://api.gemini.com/v1/prediction-markets/events/${t}`, { signal: AbortSignal.timeout(8000) });
         if (!r.ok) return;
-        for (const c of (await r.json()).contracts ?? []) {
+        const ev = await r.json();
+        for (const c of ev.contracts ?? []) {
+          // Titles normally come from the bulk feed; this small per-event fetch fills them in when that feed fails.
+          symbolInfo[c.instrumentSymbol] ??= {
+            title: `${ev.title || "Prediction market"} · ${c.label || c.ticker || ""}`,
+            tag: (c.ticker || ev.ticker || "GEMINI").slice(0, 11),
+          };
           if (c.resolutionSide) continue;
           const { bestBid, bestAsk, lastTradePrice } = c.prices ?? {};
           const bid = Number(bestBid), ask = Number(bestAsk);
@@ -672,7 +678,11 @@ async function pollLiveOnce() {
       } catch {} // next tick retries
     }),
   );
-  for (const m of markets) if (!m.settled && livePrice[symOf(m)] !== undefined) m.price = livePrice[symOf(m)];
+  for (const m of markets) {
+    if (!m.settled && livePrice[symOf(m)] !== undefined) m.price = livePrice[symOf(m)];
+    const info = m.chainIdx !== undefined && m.title === m.name && symbolInfo[m.name];
+    if (info) Object.assign(m, { title: info.title, tag: info.tag });
+  }
   if (active.liveHist) active.history[active.history.length - 1] = active.price; // chart tip follows the live price
   render();
 }
