@@ -5,3 +5,4 @@ broadcast/
 .wrangler/
 scripts/deployment.json
 .env
+dist/
