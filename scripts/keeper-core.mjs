@@ -22,7 +22,8 @@ const getJSON = async (url) => {
 /** → { price: 0..1, resolved: "yes" | "no" | null } */
 const quote = {
   async gemini(symbol) {
-    const [, eventTicker] = symbol.split("-"); // GEMI-<eventTicker>-<contractTicker>
+    // GEMI-<eventTicker>-<contractTicker>; event tickers can contain dashes (NBA-2611200100-LAC-SAS-T), contract tickers don't
+    const eventTicker = symbol.slice(5, symbol.lastIndexOf("-"));
     const ev = await getJSON(`${GEMINI}/${eventTicker}`);
     const c = (ev.contracts || []).find((x) => x.instrumentSymbol === symbol);
     if (!c) throw Error(`no Gemini contract ${symbol}`);

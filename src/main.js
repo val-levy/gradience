@@ -656,7 +656,7 @@ async function pollLive() {
 }
 async function pollLiveOnce() {
   if (symOf(active) && !active.histLoaded) loadGeminiHistory(active);
-  const tickers = [...new Set([active, ...shownMarkets].map(symOf).filter(Boolean).map((s) => s.split("-")[1]))].slice(0, 12);
+  const tickers = [...new Set([active, ...shownMarkets].map(symOf).filter(Boolean).map((s) => s.slice(5, s.lastIndexOf("-"))))].slice(0, 12);
   await Promise.all(
     tickers.map(async (t) => {
       try {
