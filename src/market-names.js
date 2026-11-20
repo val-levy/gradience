@@ -6,4 +6,8 @@ window.MARKET_NAMES = {
   "GEMI-NFL-2611221800-ARI-KC-PPRECY-MCBRIDEO49": "Arizona vs Kansas City: Player Receiving Yards · Trey McBride 50+ Receiving Yards",
   "GEMI-UCL-2611252000-ROM-PSG-REGS-PSG1": "Roma vs PSG: Point Spread · Reg Time: PSG wins by more than 1.5 goals",
   "GEMI-WXHIGH-MIA-2611210459-82TO83": "Highest temperature in Miami on November 20, 2026? · 82°F to 83°F",
+  "GEMI-NCAAF-2611211700-TAM-OU-M-OU": "Texas A&M vs Oklahoma · Oklahoma",
+  "GEMI-NFL-2611261800-CHI-DET-M-CHI": "Chicago vs Detroit · Chicago",
+  "GEMI-NBA-2611222030-DET-ATL-M-DET": "Detroit vs Atlanta · Detroit",
+  "GEMI-NHL-2611220000-NYI-DET-M-DET": "New York I vs Detroit · Detroit",
 };
